@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="dark" />
+<link rel="icon" href="data:," />
+<title>Universe Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#030309;
+    --panel:rgba(10,10,22,.78);
+    --panel-border:rgba(150,140,255,.18);
+    --ink:#eceaff;
+    --ink-dim:#9d97c4;
+    --ink-faint:#6b6690;
+    --violet:#a78bfa;
+    --teal:#2dd4bf;
+    --gold:#fbbf24;
+    --rose:#fb7185;
+    --accent:#8b7cf6;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Outfit",system-ui,-apple-system,"Segoe UI",sans-serif;
+    overflow:hidden;overscroll-behavior:none;
+  }
+  #sky{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+  #sky.armed{cursor:pointer}
+
+  /* ---------- top-left stats ---------- */
+  .stats{
+    position:fixed;top:calc(12px + env(safe-area-inset-top));left:12px;z-index:10;
+    background:var(--panel);border:1px solid var(--panel-border);border-radius:var(--radius);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    padding:12px 14px;min-width:196px;pointer-events:none;
+  }
+  .stats h1{font-size:15px;font-weight:600;letter-spacing:.04em;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+  .stats h1 .dot{width:8px;height:8px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal);flex:none;animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .stat-row{display:flex;justify-content:space-between;align-items:baseline;gap:18px;padding:2.5px 0}
+  .stat-row .k{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim)}
+  .stat-row .v{font-family:"JetBrains Mono",monospace;font-size:14px;font-weight:600;color:var(--ink)}
+  .stat-row .v small{font-size:10px;color:var(--ink-faint);font-weight:400}
+  .entropy-track{height:5px;border-radius:99px;background:rgba(255,255,255,.08);margin-top:7px;overflow:hidden}
+  .entropy-fill{height:100%;width:0%;border-radius:99px;background:linear-gradient(90deg,var(--teal),var(--gold),var(--rose));transition:width .6s ease}
+  .scale-name{margin-top:7px;font-size:11px;color:var(--violet);letter-spacing:.06em}
+
+  /* ---------- top-right toggles ---------- */
+  .top-actions{
+    position:fixed;top:calc(12px + env(safe-area-inset-top));right:12px;z-index:10;
+    display:flex;gap:8px;align-items:stretch;
+  }
+  .field-toggle{
+    display:flex;align-items:center;gap:9px;min-height:44px;padding:8px 13px;cursor:pointer;
+    background:var(--panel);border:1px solid var(--panel-border);border-radius:var(--radius);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    font-size:13px;font-weight:500;color:var(--ink);user-select:none;
+  }
+  .field-toggle input{
+    -webkit-appearance:none;appearance:none;width:38px;height:22px;border-radius:99px;flex:none;
+    background:rgba(255,255,255,.16);position:relative;cursor:pointer;margin:0;transition:background .25s;
+  }
+  .field-toggle input::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#cfc9f5;transition:transform .25s,background .25s}
+  .field-toggle input:checked{background:var(--teal)}
+  .field-toggle input:checked::after{transform:translateX(16px);background:#04211c}
+  .field-toggle input:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+  .field-short{display:none}
+  .icon-btn{
+    width:44px;min-height:44px;border-radius:var(--radius);border:1px solid var(--panel-border);
+    background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    color:var(--ink);cursor:pointer;display:grid;place-items:center;padding:0;
+  }
+  .icon-btn:active{transform:scale(.94)}
+  .icon-btn svg{width:19px;height:19px}
+
+  /* ---------- hint toast ---------- */
+  .hint{
+    position:fixed;left:50%;transform:translateX(-50%);bottom:196px;z-index:9;
+    background:rgba(8,8,20,.85);border:1px solid var(--panel-border);border-radius:99px;
+    padding:8px 16px;font-size:13px;color:var(--ink-dim);white-space:nowrap;
+    pointer-events:none;opacity:0;transition:opacity .35s;max-width:92vw;text-overflow:ellipsis;overflow:hidden;
+  }
+  .hint.show{opacity:1}
+  .hint b{color:var(--gold);font-weight:600}
+
+  /* ---------- bottom dock ---------- */
+  .dock{
+    position:fixed;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom));z-index:10;
+    width:min(1060px,calc(100vw - 16px));
+    background:var(--panel);border:1px solid var(--panel-border);border-radius:18px;
+    backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    padding:10px 12px 11px;display:flex;flex-direction:column;gap:9px;
+  }
+  .dock-row{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+  .dock-row + .dock-row{border-top:1px solid rgba(255,255,255,.06);padding-top:9px}
+  .group-label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);width:100%;margin-bottom:-2px}
+  button.chip{
+    min-height:38px;padding:8px 13px;border-radius:10px;border:1px solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.05);color:var(--ink);font-family:inherit;font-size:13px;font-weight:500;
+    cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:background .15s,border-color .15s,transform .1s;
+  }
+  button.chip svg{width:15px;height:15px;flex:none}
+  button.chip:hover{background:rgba(255,255,255,.11)}
+  button.chip:active{transform:scale(.96)}
+  button.chip.preset{border-color:rgba(167,139,250,.35)}
+  button.chip.action-gold{border-color:rgba(251,191,36,.45);color:#ffe9b0}
+  button.chip.action-rose{border-color:rgba(251,113,133,.45);color:#ffd3da}
+  button.chip.armed{background:rgba(251,113,133,.22);border-color:var(--rose);color:#fff;box-shadow:0 0 16px rgba(251,113,133,.35)}
+  button.chip.primary{background:var(--accent);border-color:var(--accent);color:#0d0a24;font-weight:600}
+  button.chip.primary:hover{background:#9d8ffa}
+  .spacer{flex:1}
+
+  .slider-group{display:flex;align-items:center;gap:9px;flex:1 1 150px;min-width:150px;padding:2px 2px}
+  .slider-group label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);white-space:nowrap}
+  .slider-group output{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--ink);min-width:44px;text-align:right}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;flex:1;height:36px;background:transparent;cursor:pointer;min-width:70px;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:99px;background:rgba(255,255,255,.16)}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:20px;height:20px;border-radius:50%;margin-top:-7.5px;
+    background:var(--ink);border:2px solid var(--accent);box-shadow:0 0 10px rgba(139,124,246,.7);
+  }
+  input[type=range]::-moz-range-track{height:5px;border-radius:99px;background:rgba(255,255,255,.16)}
+  input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--ink);border:2px solid var(--accent);box-shadow:0 0 10px rgba(139,124,246,.7)}
+
+  .note{font-size:11.5px;color:var(--ink-faint);line-height:1.45}
+  .note b{color:var(--ink-dim);font-weight:500}
+
+  @media (max-width:640px){
+    .stats{min-width:0;width:172px;padding:10px 12px}
+    .stats h1{font-size:12.5px;white-space:nowrap}
+    .stat-row{gap:8px}
+    .stat-row .k{font-size:10px}
+    .stat-row .v{font-size:12px}
+    .field-toggle{padding:8px 10px;gap:7px;font-size:12px}
+    .field-long{display:none}
+    .field-short{display:inline}
+    .hint{bottom:auto;top:calc(196px + env(safe-area-inset-top));white-space:normal;text-align:center;line-height:1.4;border-radius:16px;width:max-content;max-width:92vw}
+    .dock{max-height:46vh;overflow-y:auto}
+    .slider-group{flex:1 1 100%}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .stats h1 .dot{animation:none}
+    .entropy-fill{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="sky" aria-label="Interactive universe canvas. Tap to spawn a star, drag to create a black hole."></canvas>
+
+<!-- Live stats -->
+<section class="stats" aria-live="off">
+  <h1><span class="dot"></span>Universe Simulator</h1>
+  <div class="stat-row"><span class="k">Stars</span><span class="v" id="statStars">0</span></div>
+  <div class="stat-row"><span class="k">Black holes</span><span class="v" id="statHoles">0</span></div>
+  <div class="stat-row"><span class="k">Age</span><span class="v"><span id="statAge">0.00</span> <small>billion yrs</small></span></div>
+  <div class="stat-row"><span class="k">Entropy</span><span class="v"><span id="statEntropy">0.0</span><small> / 100</small></span></div>
+  <div class="entropy-track"><div class="entropy-fill" id="entropyFill"></div></div>
+  <div class="scale-name" id="scaleName">Stellar neighbourhood</div>
+</section>
+
+<!-- Top-right -->
+<div class="top-actions">
+  <label class="field-toggle">
+    <input type="checkbox" id="fieldToggle" aria-label="Quantum field" />
+    <span class="field-label field-long">Quantum field</span><span class="field-label field-short">Field</span>
+  </label>
+  <button class="icon-btn" id="pauseBtn" aria-label="Pause simulation" title="Pause / play">
+    <svg id="pauseIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="4" width="5" height="16" rx="1.4"/><rect x="14" y="4" width="5" height="16" rx="1.4"/></svg>
+    <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="display:none"><path d="M7 4.8c0-1.1 1.2-1.8 2.2-1.2l11 6.7c.9.6.9 1.9 0 2.5l-11 6.7c-1 .6-2.2-.1-2.2-1.2V4.8z"/></svg>
+  </button>
+</div>
+
+<div class="hint" id="hint" role="status"></div>
+
+<!-- Control dock -->
+<div class="dock">
+  <div class="dock-row" role="group" aria-label="Presets">
+    <span class="group-label">Begin the universe</span>
+    <button class="chip preset" data-preset="bigbang">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="2.4" fill="currentColor" stroke="none"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M19.1 4.9l-2.8 2.8M7.7 16.3l-2.8 2.8"/></svg>
+      Big Bang
+    </button>
+    <button class="chip preset" data-preset="milkyway">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 12c0-3 2-5 5-5 4 0 5 3 4 5-1.4 2.8-5 4-8 3-3-.9-4-4-2-6 1.6-1.6 4-1 5 1"/></svg>
+      Milky Way
+    </button>
+    <button class="chip preset" data-preset="blackhole">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none"/><ellipse cx="12" cy="12" rx="10" ry="3.6"/></svg>
+      Black Hole
+    </button>
+    <button class="chip preset" data-preset="nebula">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="8" cy="10" r="3.4" opacity=".55"/><circle cx="15" cy="8" r="4.2" opacity=".4"/><circle cx="13" cy="14" r="4.6" opacity=".5"/><circle cx="18" cy="13" r="2.4" opacity=".6"/></svg>
+      Nebula
+    </button>
+    <span class="spacer"></span>
+    <button class="chip" id="resetBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.3"/><path d="M3 4v5h5"/></svg>
+      Reset
+    </button>
+  </div>
+
+  <div class="dock-row" role="group" aria-label="God tools">
+    <span class="group-label">Play god</span>
+    <button class="chip action-rose" id="supernovaBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/><circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none"/></svg>
+      Supernova — tap a star
+    </button>
+    <button class="chip action-gold" id="galaxyBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/><path d="M12 12c1-4 4-6 8-6M12 12c-1 4-4 6-8 6M12 12c4 1 6 4 6 8M12 12c-4-1-6-4-6-8"/></svg>
+      Create galaxy
+    </button>
+    <button class="chip" id="holeBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/><ellipse cx="12" cy="12" rx="10" ry="3.4"/></svg>
+      Black hole — tap to drop
+    </button>
+  </div>
+
+  <div class="dock-row" role="group" aria-label="Simulation controls">
+    <div class="slider-group">
+      <label for="speedSlider">Time</label>
+      <input type="range" id="speedSlider" min="0" max="300" value="100" />
+      <output id="speedOut">1.0×</output>
+    </div>
+    <div class="slider-group">
+      <label for="gravitySlider">Gravity</label>
+      <input type="range" id="gravitySlider" min="0" max="200" value="100" />
+      <output id="gravityOut">1.0×</output>
+    </div>
+    <div class="slider-group">
+      <label for="countSlider">Stars</label>
+      <input type="range" id="countSlider" min="20" max="800" step="10" value="260" />
+      <output id="countOut">260</output>
+    </div>
+    <div class="slider-group">
+      <label for="scaleSlider">Scale</label>
+      <input type="range" id="scaleSlider" min="0" max="100" value="46" />
+      <output id="scaleOut">Galaxy</output>
+    </div>
+  </div>
+
+  <p class="note"><b>How to play:</b> tap anywhere to birth a star · drag to tear open a black hole · it will pull stars into orbit and swallow the ones that fall in. A playful simulation, not real astrophysics — gravity and orbits are simplified for fun. With the field on, you are seeing the universe the way Faggin's quantum-field view describes it: not things in space, but waves in a field.</p>
+</div>
+
+<script>
+(function(){
+"use strict";
+var canvas = document.getElementById('sky');
+var ctx = canvas.getContext('2d');
+var W = 0, H = 0, DPR = 1;
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+}
+window.addEventListener('resize', resize); resize();
+
+/* ---------------- state ---------------- */
+var stars = [], particles = [], nebulae = [], holes = [], cores = [], motes = [], foam = [], ripples = [];
+var age = 0, burnedOut = 0, swallowed = 0, entropyFloor = 0;
+var paused = false, fieldOn = false, supernovaArmed = false, holeArmed = false;
+var time = 0, flash = 0;
+var MAX_STARS = 900, MAX_PARTICLES = 700;
+
+var speed = 1, gravity = 1, scaleVal = 46;
+
+var STAR_COLORS = [
+  {core:'#ffffff', glow:'rgba(190,200,255,'},
+  {core:'#fff7dd', glow:'rgba(251,191,36,'},
+  {core:'#e0fbff', glow:'rgba(45,212,191,'},
+  {core:'#ffe3ee', glow:'rgba(251,113,133,'},
+  {core:'#efe6ff', glow:'rgba(167,139,250,'},
+  {core:'#ffffff', glow:'rgba(255,255,255,'}
+];
+var NEB_COLORS = [
+  'rgba(139,92,246,', 'rgba(45,212,191,', 'rgba(217,164,65,',
+  'rgba(219,39,119,', 'rgba(59,130,246,', 'rgba(16,185,129,'
+];
+
+function rand(a,b){ return a + Math.random()*(b-a); }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+
+/* ---------------- view / scale ---------------- */
+function viewScale(){ return 0.45 + (scaleVal/100) * 1.55; }        // 0.45 .. 2.0
+function toWorld(sx, sy){
+  var s = viewScale();
+  return { x: (sx - W/2)/s + W/2, y: (sy - H/2)/s + H/2 };
+}
+function scaleLabel(){
+  if (scaleVal < 22) return 'Quantum foam';
+  if (scaleVal < 45) return 'Stellar neighbourhood';
+  if (scaleVal < 72) return 'Galaxy';
+  return 'Galaxy clusters';
+}
+
+/* ---------------- entities ---------------- */
+function makeStar(x, y, vx, vy, opts){
+  opts = opts || {};
+  var c = pick(STAR_COLORS);
+  return {
+    x:x, y:y, vx:vx||0, vy:vy||0,
+    r: opts.r || rand(0.9, 2.6),
+    core: opts.core || c.core, glow: opts.glow || c.glow,
+    phase: rand(0, Math.PI*2), tw: rand(0.6, 1.6),
+    life: 1, decay: opts.decay || rand(0.00004, 0.00022),
+    temp: rand(0.7, 1.3)
+  };
+}
+function addStar(x,y,vx,vy,opts){
+  if (stars.length >= MAX_STARS) stars.splice(0, stars.length - MAX_STARS + 1);
+  var s = makeStar(x,y,vx,vy,opts); stars.push(s); return s;
+}
+function makeNebula(x, y, r, ci){
+  nebulae.push({ x:x, y:y, r:r || rand(90, 210), c: NEB_COLORS[ci != null ? ci : Math.floor(rand(0,NEB_COLORS.length))],
+    a: rand(0.10, 0.20), drift: rand(0, Math.PI*2), seed: rand(0, 1000) });
+  if (nebulae.length > 26) nebulae.shift();
+}
+function makeHole(x, y, mass){
+  var h = { x:x, y:y, mass: mass || 900, r: 10 + Math.sqrt(mass || 900) * 0.55, spin: rand(0, Math.PI*2), disk: [] };
+  for (var i = 0; i < 46; i++){
+    h.disk.push({ a: rand(0, Math.PI*2), d: rand(1.25, 2.6), sp: rand(0.6, 1.4), s: rand(0.7, 2.1) });
+  }
+  holes.push(h); if (holes.length > 6) holes.shift();
+  ripples.push({ x:x, y:y, r: h.r, max: h.r * 7, a: 0.5, col: '251,191,36' });
+  return h;
+}
+function burst(x, y, n, colBase, power){
+  for (var i = 0; i < n; i++){
+    if (particles.length >= MAX_PARTICLES) particles.shift();
+    var a = rand(0, Math.PI*2), sp = rand(0.2, 1) * (power || 2.6);
+    particles.push({ x:x, y:y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+      life: 1, decay: rand(0.004, 0.014), r: rand(0.7, 2.6), col: colBase, drag: 0.985 });
+  }
+}
+
+/* ---------------- builders ---------------- */
+function clearAll(){
+  stars = []; particles = []; nebulae = []; holes = []; cores = []; ripples = [];
+  age = 0; burnedOut = 0; swallowed = 0; entropyFloor = 0; flash = 0;
+}
+function spiralGalaxy(cx, cy, count, radius, armTightness){
+  cores.push({ x: cx, y: cy, mass: 2600 });
+  var arms = Math.random() < 0.5 ? 2 : 3;
+  for (var i = 0; i < count; i++){
+    var t = Math.pow(Math.random(), 0.62);
+    var dist = 14 + t * radius;
+    var arm = (i % arms) * (Math.PI*2/arms);
+    var ang = arm + t * (armTightness || 3.4) + rand(-0.16, 0.16);
+    var x = cx + Math.cos(ang) * dist, y = cy + Math.sin(ang) * dist * 0.92;
+    var spd = Math.sqrt(900 * gravityBase() / Math.max(dist, 20)) * 26;
+    var vx = -Math.sin(ang) * spd * 0.016, vy = Math.cos(ang) * spd * 0.016;
+    var warm = t < 0.3;
+    addStar(x, y, vx + rand(-0.08,0.08), vy + rand(-0.08,0.08),
+      warm ? { core:'#fff3cf', glow:'rgba(251,191,36,' } : null);
+  }
+  makeNebula(cx + rand(-radius, radius)*0.5, cy + rand(-60, 60), rand(120, 200));
+}
+function gravityBase(){ return gravity; }
+
+function preset(name){
+  clearAll();
+  var cx = W/2, cy = H/2 - 40;
+  if (name === 'bigbang'){
+    flash = 1;
+    for (var i = 0; i < 340; i++){
+      var a = rand(0, Math.PI*2), sp = rand(0.4, 3.6) * (0.4 + Math.random());
+      addStar(cx, cy, Math.cos(a)*sp, Math.sin(a)*sp);
+    }
+    makeNebula(cx, cy, 150, 0); makeNebula(cx, cy, 110, 3);
+    showHint('<b>Big Bang.</b> Everything from a single point — watch entropy climb as it spreads.');
+  }
+  if (name === 'milkyway'){
+    spiralGalaxy(cx, cy, 420, Math.min(W, H) * 0.42, 3.6);
+    seedMotes();
+    showHint('<b>Milky Way.</b> Hundreds of stars turning around one galactic heart.');
+  }
+  if (name === 'blackhole'){
+    var h = makeHole(cx, cy, 2400);
+    for (var j = 0; j < 190; j++){
+      var aa = rand(0, Math.PI*2), dd = rand(90, Math.min(W,H)*0.46);
+      var sx = cx + Math.cos(aa)*dd, sy = cy + Math.sin(aa)*dd;
+      var os = Math.sqrt(2400 * 0.9 / dd) * 1.35;
+      addStar(sx, sy, -Math.sin(aa)*os + rand(-0.05,0.05), Math.cos(aa)*os + rand(-0.05,0.05));
+    }
+    makeNebula(cx - 200, cy - 130, 170, 0); makeNebula(cx + 230, cy + 120, 150, 1);
+    showHint('<b>Black hole.</b> The gold ring is its accretion disk — infalling light, heated to a glow.');
+  }
+  if (name === 'nebula'){
+    var cols = [0,1,2,3,1,0];
+    for (var k = 0; k < 6; k++) makeNebula(rand(W*0.15, W*0.85), rand(H*0.15, H*0.7), rand(110, 230), cols[k]);
+    for (var m = 0; m < 170; m++){
+      var nb = pick(nebulae);
+      var na = rand(0, Math.PI*2), nd = rand(0, nb.r * 0.8);
+      addStar(nb.x + Math.cos(na)*nd, nb.y + Math.sin(na)*nd, rand(-0.15,0.15), rand(-0.15,0.15),
+        { core:'#ffffff', glow: pick(NEB_COLORS).replace('rgba','rgba') });
+    }
+    seedMotes();
+    showHint('<b>Stellar nursery.</b> Newborn stars lighting their own gas clouds from inside.');
+  }
+  syncCountSlider();
+}
+function seedMotes(){
+  motes = [];
+  for (var i = 0; i < 70; i++) motes.push({ x: rand(0, W), y: rand(0, H), r: rand(0.5, 1.6), ph: rand(0, 6.28), sp: rand(0.02, 0.1) });
+}
+function seedFoam(){
+  foam = [];
+  for (var i = 0; i < 240; i++) foam.push({ x: rand(0, W), y: rand(0, H), ph: rand(0, 6.28), r: rand(0.6, 2.0) });
+}
+seedMotes(); seedFoam();
+
+/* ---------------- supernova ---------------- */
+function supernova(star){
+  var idx = stars.indexOf(star); if (idx < 0) return;
+  stars.splice(idx, 1);
+  flash = Math.max(flash, 0.55);
+  burst(star.x, star.y, 90, '251,191,36', 4.2);
+  burst(star.x, star.y, 50, '251,113,133', 3.0);
+  burst(star.x, star.y, 40, '255,255,255', 2.0);
+  ripples.push({ x: star.x, y: star.y, r: 4, max: 190, a: 0.8, col: '251,191,36' });
+  makeNebula(star.x, star.y, rand(90, 150));
+  burnedOut += 6; entropyFloor = Math.min(96, entropyFloor + 2.5);
+  // a few newborn stars from the shock front
+  for (var i = 0; i < 4; i++){
+    var a = rand(0, Math.PI*2);
+    addStar(star.x + Math.cos(a)*rand(30, 80), star.y + Math.sin(a)*rand(30, 80), Math.cos(a)*0.4, Math.sin(a)*0.4, { core:'#e0fbff', glow:'rgba(45,212,191,' });
+  }
+  showHint('<b>Supernova.</b> The star is gone — its gas becomes a nebula, and new stars are born in the shock.');
+}
+function nearestStar(x, y, maxD){
+  var best = null, bd = maxD || 1e9;
+  for (var i = 0; i < stars.length; i++){
+    var dx = stars[i].x - x, dy = stars[i].y - y, d = Math.sqrt(dx*dx + dy*dy);
+    if (d < bd){ bd = d; best = stars[i]; }
+  }
+  return best;
+}
+
+/* ---------------- physics ---------------- */
+function step(dt){
+  var G = 60 * gravity;
+  var i, j, s, dx, dy, d2, d, f;
+
+  // gravity wells: black holes + galaxy cores
+  var wells = [];
+  for (i = 0; i < holes.length; i++) wells.push({ x: holes[i].x, y: holes[i].y, m: holes[i].mass, hole: holes[i] });
+  for (i = 0; i < cores.length; i++) wells.push({ x: cores[i].x, y: cores[i].y, m: cores[i].mass, hole: null });
+
+  for (i = stars.length - 1; i >= 0; i--){
+    s = stars[i];
+    var swallowedNow = false;
+    for (j = 0; j < wells.length; j++){
+      var w = wells[j];
+      dx = w.x - s.x; dy = w.y - s.y; d2 = dx*dx + dy*dy; d = Math.sqrt(d2) || 1;
+      if (w.hole && d < w.hole.r + 2){
+        // swallowed
+        w.hole.mass += 26; w.hole.r = 10 + Math.sqrt(w.hole.mass) * 0.55;
+        burst(s.x, s.y, 7, '251,191,36', 1.4);
+        swallowed++; entropyFloor = Math.min(96, entropyFloor + 0.35);
+        stars.splice(i, 1); swallowedNow = true; break;
+      }
+      f = G * w.m / Math.max(d2, 400) * dt * 0.055;
+      s.vx += (dx/d) * f; s.vy += (dy/d) * f;
+    }
+    if (swallowedNow) continue;
+
+    // gentle drag keeps orbits from flying apart forever
+    s.vx *= 0.9995; s.vy *= 0.9995;
+    s.x += s.vx * dt; s.y += s.vy * dt;
+
+    // burn out very slowly
+    s.life -= s.decay * dt;
+    if (s.life <= 0){
+      burst(s.x, s.y, 10, '167,139,250', 1.1);
+      stars.splice(i, 1); burnedOut++;
+      continue;
+    }
+    // wrap far-flung stars softly back into view
+    if (s.x < -80) s.x = W + 80; if (s.x > W + 80) s.x = -80;
+    if (s.y < -80) s.y = H + 80; if (s.y > H + 80) s.y = -80;
+  }
+
+  for (i = particles.length - 1; i >= 0; i--){
+    var p = particles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= p.drag; p.vy *= p.drag;
+    p.life -= p.decay * dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  for (i = ripples.length - 1; i >= 0; i--){
+    ripples[i].r += 2.6 * dt; ripples[i].a *= Math.pow(0.965, dt);
+    if (ripples[i].r > ripples[i].max || ripples[i].a < 0.01) ripples.splice(i, 1);
+  }
+  for (i = 0; i < holes.length; i++) holes[i].spin += 0.011 * dt;
+  age += dt * 0.045 * speed;
+  flash *= Math.pow(0.93, dt);
+}
+
+/* ---------------- drawing ---------------- */
+function drawField(s){
+  // Faggin's field: flowing wave lines beneath everything
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  var rows = 9, t = time * 0.7;
+  for (var r = 0; r < rows; r++){
+    var baseY = (H / (rows + 1)) * (r + 1);
+    ctx.beginPath();
+    for (var x = -20; x <= W + 20; x += 14){
+      var y = baseY
+        + Math.sin(x * 0.011 + t + r * 0.9) * 16
+        + Math.sin(x * 0.004 - t * 0.6 + r * 2.1) * 22;
+      if (x === -20) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    var hue = r % 3;
+    ctx.strokeStyle = hue === 0 ? 'rgba(45,212,191,0.10)' : (hue === 1 ? 'rgba(167,139,250,0.10)' : 'rgba(251,191,36,0.07)');
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawFoam(alpha){
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (var i = 0; i < foam.length; i++){
+    var f = foam[i];
+    var flick = 0.35 + 0.65 * Math.abs(Math.sin(time * 3 + f.ph * 7));
+    var jx = Math.sin(time * 5 + f.ph * 13) * 2.2, jy = Math.cos(time * 4.3 + f.ph * 9) * 2.2;
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(160,240,255,' + (alpha * flick * 0.5).toFixed(3) + ')';
+    ctx.arc(f.x + jx, f.y + jy, f.r, 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawClusterBackdrop(alpha){
+  // distant galaxy clusters: faint smudges far away
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  var spots = [[0.16,0.2],[0.82,0.16],[0.68,0.34],[0.24,0.42],[0.9,0.55],[0.08,0.62]];
+  for (var i = 0; i < spots.length; i++){
+    var x = spots[i][0] * W, y = spots[i][1] * H;
+    var g = ctx.createRadialGradient(x, y, 0, x, y, 46);
+    g.addColorStop(0, 'rgba(220,215,255,0.16)'); g.addColorStop(1, 'rgba(220,215,255,0)');
+    ctx.fillStyle = g;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(i * 0.9); ctx.scale(1, 0.42);
+    ctx.beginPath(); ctx.arc(0, 0, 46, 0, 6.2832); ctx.fill(); ctx.restore();
+  }
+  ctx.restore();
+}
+function draw(){
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.fillStyle = '#030309';
+  ctx.fillRect(0, 0, W, H);
+
+  var s = viewScale();
+  ctx.translate(W/2, H/2); ctx.scale(s, s); ctx.translate(-W/2, -H/2);
+
+  if (fieldOn) drawField(s);
+  if (scaleVal >= 70) drawClusterBackdrop((scaleVal - 70) / 30 * 0.9);
+
+  // nebulae
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (var i = 0; i < nebulae.length; i++){
+    var n = nebulae[i];
+    var breathe = 1 + Math.sin(time * 0.3 + n.seed) * 0.05;
+    for (var layer = 2; layer >= 0; layer--){
+      var rr = n.r * breathe * (0.45 + layer * 0.3);
+      var g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, rr);
+      g.addColorStop(0, n.c + (n.a * (layer === 0 ? 1 : 0.5)).toFixed(3) + ')');
+      g.addColorStop(1, n.c + '0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(n.x + Math.sin(n.seed + layer * 2) * 18, n.y + Math.cos(n.seed * 1.3 + layer) * 14, rr, 0, 6.2832);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  // galaxy cores
+  for (i = 0; i < cores.length; i++){
+    var c = cores[i];
+    var cg = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 34);
+    cg.addColorStop(0, 'rgba(255,244,214,0.85)'); cg.addColorStop(0.35, 'rgba(251,191,36,0.28)'); cg.addColorStop(1, 'rgba(251,191,36,0)');
+    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(c.x, c.y, 34, 0, 6.2832); ctx.fill();
+  }
+
+  // ripples
+  for (i = 0; i < ripples.length; i++){
+    var rp = ripples[i];
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(' + rp.col + ',' + rp.a.toFixed(3) + ')';
+    ctx.lineWidth = 2;
+    ctx.arc(rp.x, rp.y, rp.r, 0, 6.2832); ctx.stroke();
+  }
+
+  // particles
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (i = 0; i < particles.length; i++){
+    var p = particles[i];
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(' + p.col + ',' + (p.life * 0.9).toFixed(3) + ')';
+    ctx.arc(p.x, p.y, p.r * p.life + 0.3, 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+
+  // stars with halos
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (i = 0; i < stars.length; i++){
+    var st = stars[i];
+    var tw = 0.72 + 0.28 * Math.sin(time * st.tw * 2 + st.phase);
+    var a = clamp(st.life, 0.12, 1) * tw;
+    var haloR = st.r * 5.2;
+    var hg = ctx.createRadialGradient(st.x, st.y, 0, st.x, st.y, haloR);
+    hg.addColorStop(0, st.glow + (0.5 * a).toFixed(3) + ')');
+    hg.addColorStop(1, st.glow + '0)');
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.arc(st.x, st.y, haloR, 0, 6.2832); ctx.fill();
+    ctx.beginPath();
+    ctx.fillStyle = st.core; ctx.globalAlpha = a;
+    ctx.arc(st.x, st.y, st.r, 0, 6.2832); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+
+  // black holes + accretion disks
+  for (i = 0; i < holes.length; i++){
+    var h = holes[i];
+    ctx.save(); ctx.translate(h.x, h.y);
+    // disk glow
+    var dg = ctx.createRadialGradient(0, 0, h.r * 0.8, 0, 0, h.r * 3.1);
+    dg.addColorStop(0, 'rgba(251,191,36,0.30)'); dg.addColorStop(0.55, 'rgba(217,119,6,0.12)'); dg.addColorStop(1, 'rgba(217,119,6,0)');
+    ctx.fillStyle = dg; ctx.beginPath(); ctx.arc(0, 0, h.r * 3.1, 0, 6.2832); ctx.fill();
+    // disk particles, tilted ellipse
+    ctx.save(); ctx.scale(1, 0.38); ctx.rotate(0); ctx.restore();
+    ctx.save(); ctx.scale(1, 0.38);
+    ctx.globalCompositeOperation = 'lighter';
+    for (var k = 0; k < h.disk.length; k++){
+      var dp = h.disk[k];
+      var ang = dp.a + h.spin * dp.sp * 2.2;
+      var rad = h.r * dp.d;
+      var px = Math.cos(ang) * rad, py = Math.sin(ang) * rad;
+      var hot = clamp(1.6 - dp.d * 0.45, 0.25, 1);
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(255,' + Math.round(170 + hot * 70) + ',90,' + (0.75 * hot).toFixed(3) + ')';
+      ctx.arc(px, py, dp.s, 0, 6.2832); ctx.fill();
+    }
+    ctx.restore();
+    // photon ring
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(255,214,130,0.9)'; ctx.lineWidth = 1.6;
+    ctx.arc(0, 0, h.r + 2.5, 0, 6.2832); ctx.stroke();
+    // event horizon
+    ctx.beginPath(); ctx.fillStyle = '#000'; ctx.arc(0, 0, h.r, 0, 6.2832); ctx.fill();
+    ctx.beginPath(); ctx.strokeStyle = 'rgba(0,0,0,1)'; ctx.arc(0, 0, h.r, 0, 6.2832); ctx.stroke();
+    ctx.restore();
+  }
+
+  // drag preview for black hole
+  if (dragging && dragDist > 26 && !supernovaArmed && !holeArmed){
+    var w0 = toWorld(dragStart.x, dragStart.y);
+    ctx.save();
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(251,191,36,0.85)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
+    ctx.arc(w0.x, w0.y, 12 + dragDist * 0.28, 0, 6.2832); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.fillStyle = 'rgba(0,0,0,0.9)';
+    ctx.arc(w0.x, w0.y, 10 + dragDist * 0.2, 0, 6.2832); ctx.fill();
+    ctx.beginPath(); ctx.strokeStyle = 'rgba(255,214,130,0.9)';
+    ctx.arc(w0.x, w0.y, 10 + dragDist * 0.2, 0, 6.2832); ctx.stroke();
+    ctx.restore();
+  }
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  // quantum foam sits above the zoom transform — it is the smallest scale
+  if (scaleVal < 34) drawFoam((34 - scaleVal) / 34);
+
+  // drifting light motes
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (i = 0; i < motes.length; i++){
+    var mo = motes[i];
+    var mx = (mo.x + time * mo.sp * 22) % (W + 10);
+    var my = mo.y + Math.sin(time * 0.4 + mo.ph) * 9;
+    ctx.beginPath();
+    ctx.fillStyle = 'rgba(200,205,255,' + (0.10 + 0.10 * Math.sin(time + mo.ph)).toFixed(3) + ')';
+    ctx.arc(mx, my, mo.r, 0, 6.2832); ctx.fill();
+  }
+  ctx.restore();
+
+  // supernova / creation flash
+  if (flash > 0.01){
+    ctx.fillStyle = 'rgba(255,246,220,' + (flash * 0.5).toFixed(3) + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+/* ---------------- entropy ---------------- */
+function computeEntropy(){
+  if (!stars.length) return entropyFloor;
+  var mx = 0, my = 0, i;
+  for (i = 0; i < stars.length; i++){ mx += stars[i].x; my += stars[i].y; }
+  mx /= stars.length; my /= stars.length;
+  var spread = 0;
+  for (i = 0; i < stars.length; i++){
+    var dx = stars[i].x - mx, dy = stars[i].y - my;
+    spread += Math.sqrt(dx*dx + dy*dy);
+  }
+  spread /= stars.length;
+  var spreadScore = clamp(spread / (Math.max(W, H) * 0.42), 0, 1) * 52;
+  var burnScore = clamp((burnedOut + swallowed * 1.4) / 60, 0, 1) * 30;
+  var e = spreadScore + burnScore + entropyFloor * 0.35;
+  return clamp(Math.max(e, entropyFloor * 0.6), 0, 100);
+}
+
+/* ---------------- HUD ---------------- */
+var elStars = document.getElementById('statStars'),
+    elHoles = document.getElementById('statHoles'),
+    elAge = document.getElementById('statAge'),
+    elEntropy = document.getElementById('statEntropy'),
+    elFill = document.getElementById('entropyFill'),
+    elScaleName = document.getElementById('scaleName');
+var hudTick = 0;
+function updateHUD(){
+  if (++hudTick % 6) return;
+  elStars.textContent = stars.length;
+  elHoles.textContent = holes.length;
+  elAge.textContent = age.toFixed(2);
+  var e = computeEntropy();
+  elEntropy.textContent = e.toFixed(1);
+  elFill.style.width = e.toFixed(1) + '%';
+  elScaleName.textContent = scaleLabel() + (fieldOn ? ' · field visible' : '');
+}
+
+/* ---------------- main loop ---------------- */
+var last = performance.now();
+function frame(now){
+  var rawDt = Math.min((now - last) / 16.667, 4); last = now;
+  if (!paused){
+    var dt = rawDt * speed;
+    time += 0.016 * speed * Math.max(rawDt, 0.2);
+    // substep for stable orbits at high speed
+    var steps = dt > 1.6 ? 2 : 1;
+    for (var q = 0; q < steps; q++) step(dt / steps);
+  }
+  draw();
+  updateHUD();
+  requestAnimationFrame(frame);
+}
+
+/* ---------------- pointer interaction ---------------- */
+var dragging = false, dragStart = null, dragDist = 0, dragCur = null;
+
+function pointerPos(e){ return { x: e.clientX, y: e.clientY }; }
+
+canvas.addEventListener('pointerdown', function(e){
+  var p = pointerPos(e);
+  dragging = true; dragStart = p; dragCur = p; dragDist = 0;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', function(e){
+  if (!dragging) return;
+  var p = pointerPos(e); dragCur = p;
+  var dx = p.x - dragStart.x, dy = p.y - dragStart.y;
+  dragDist = Math.sqrt(dx*dx + dy*dy);
+});
+canvas.addEventListener('pointerup', function(e){
+  if (!dragging) return;
+  dragging = false;
+  var p = pointerPos(e);
+  var w = toWorld(p.x, p.y);
+  var w0 = toWorld(dragStart.x, dragStart.y);
+
+  if (supernovaArmed){
+    var target = nearestStar(w.x, w.y, 110) || nearestStar(w.x, w.y);
+    if (target) supernova(target);
+    else showHint('No stars yet — tap the sky to birth one first.');
+    setSupernovaArmed(false);
+    return;
+  }
+  if (holeArmed){
+    makeHole(w.x, w.y, 1100);
+    burst(w.x, w.y, 22, '251,191,36', 2.2);
+    showHint('<b>Black hole dropped.</b> Nearby stars will fall into orbit — or in.');
+    setHoleArmed(false);
+    return;
+  }
+  if (dragDist > 26){
+    var h = makeHole(w0.x, w0.y, 500 + dragDist * 9);
+    burst(w0.x, w0.y, 26, '251,191,36', 2.4);
+    showHint('<b>Black hole torn open.</b> Mass ' + Math.round(h.mass) + ' — watch the disk feed.');
+  } else {
+    var st = addStar(w.x, w.y, rand(-0.25, 0.25), rand(-0.25, 0.25));
+    burst(w.x, w.y, 8, '255,255,255', 1.0);
+    ripples.push({ x: w.x, y: w.y, r: 2, max: 42, a: 0.5, col: '190,200,255' });
+    if (stars.length === 1) showHint('A star is born. <b>Drag</b> anywhere to tear open a black hole.');
+  }
+});
+canvas.addEventListener('pointercancel', function(){ dragging = false; });
+
+/* ---------------- hint ---------------- */
+var hintEl = document.getElementById('hint'), hintTimer = null;
+function showHint(html){
+  hintEl.innerHTML = html;
+  hintEl.classList.add('show');
+  if (hintTimer) clearTimeout(hintTimer);
+  hintTimer = setTimeout(function(){ hintEl.classList.remove('show'); }, 4600);
+}
+
+/* ---------------- controls ---------------- */
+function setSupernovaArmed(on){
+  supernovaArmed = on;
+  document.getElementById('supernovaBtn').classList.toggle('armed', on);
+  canvas.classList.toggle('armed', on || holeArmed);
+}
+function setHoleArmed(on){
+  holeArmed = on;
+  document.getElementById('holeBtn').classList.toggle('armed', on);
+  canvas.classList.toggle('armed', on || supernovaArmed);
+}
+document.getElementById('supernovaBtn').addEventListener('click', function(){
+  if (!stars.length){ showHint('No stars yet — tap the sky to birth one, then detonate it.'); return; }
+  setHoleArmed(false);
+  setSupernovaArmed(!supernovaArmed);
+  if (supernovaArmed) showHint('<b>Supernova armed.</b> Now tap the star you want to explode.');
+});
+document.getElementById('holeBtn').addEventListener('click', function(){
+  setSupernovaArmed(false);
+  setHoleArmed(!holeArmed);
+  if (holeArmed) showHint('<b>Black hole armed.</b> Tap where it should open.');
+});
+document.getElementById('galaxyBtn').addEventListener('click', function(){
+  var gx = rand(W * 0.3, W * 0.7), gy = rand(H * 0.28, H * 0.6);
+  spiralGalaxy(gx, gy, 210, rand(150, 230), rand(3.0, 4.0));
+  flash = Math.max(flash, 0.25);
+  showHint('<b>A galaxy spins up</b> — 210 new stars around a fresh galactic heart.');
+  syncCountSlider();
+});
+
+var presetBtns = document.querySelectorAll('[data-preset]');
+for (var pb = 0; pb < presetBtns.length; pb++){
+  presetBtns[pb].addEventListener('click', function(){ preset(this.getAttribute('data-preset')); });
+}
+document.getElementById('resetBtn').addEventListener('click', function(){
+  clearAll(); seedMotes();
+  for (var i = 0; i < 120; i++) addStar(rand(0, W), rand(0, H * 0.8), rand(-0.2, 0.2), rand(-0.2, 0.2));
+  showHint('A quiet, empty universe. <b>Tap</b> to begin again.');
+  syncCountSlider();
+});
+
+var pauseBtn = document.getElementById('pauseBtn');
+function setPaused(on){
+  paused = on;
+  document.getElementById('pauseIcon').style.display = on ? 'none' : '';
+  document.getElementById('playIcon').style.display = on ? '' : 'none';
+  pauseBtn.setAttribute('aria-label', on ? 'Play simulation' : 'Pause simulation');
+}
+pauseBtn.addEventListener('click', function(){ setPaused(!paused); });
+
+document.getElementById('fieldToggle').addEventListener('change', function(){
+  fieldOn = this.checked;
+  if (fieldOn) showHint('<b>The field is showing.</b> Beneath every star — waves, all the way down.');
+});
+
+var speedSlider = document.getElementById('speedSlider'), speedOut = document.getElementById('speedOut');
+speedSlider.addEventListener('input', function(){
+  speed = this.value / 100;
+  speedOut.textContent = speed.toFixed(speed < 1 ? 2 : 1).replace(/0$/, '') + '×';
+  if (speed === 0) speedOut.textContent = '0×';
+});
+var gravitySlider = document.getElementById('gravitySlider'), gravityOut = document.getElementById('gravityOut');
+gravitySlider.addEventListener('input', function(){
+  gravity = this.value / 100;
+  gravityOut.textContent = gravity.toFixed(2).replace(/0$/, '') + '×';
+});
+var countSlider = document.getElementById('countSlider'), countOut = document.getElementById('countOut');
+function syncCountSlider(){
+  countSlider.value = clamp(stars.length, 20, 800);
+  countOut.textContent = stars.length;
+}
+countSlider.addEventListener('input', function(){
+  var target = parseInt(this.value, 10);
+  countOut.textContent = target;
+  while (stars.length < target) addStar(rand(0, W), rand(0, H * 0.85), rand(-0.3, 0.3), rand(-0.3, 0.3));
+  while (stars.length > target){ stars.splice(Math.floor(Math.random() * stars.length), 1); }
+});
+var scaleSlider = document.getElementById('scaleSlider'), scaleOut = document.getElementById('scaleOut');
+scaleSlider.addEventListener('input', function(){
+  scaleVal = parseInt(this.value, 10);
+  var lbl = scaleLabel();
+  scaleOut.textContent = lbl === 'Stellar neighbourhood' ? 'Stellar' : (lbl === 'Galaxy clusters' ? 'Clusters' : lbl.replace('Quantum ', ''));
+  elScaleName.textContent = lbl + (fieldOn ? ' · field visible' : '');
+  if (scaleVal < 22) showHint('<b>Quantum foam.</b> Zoomed all the way in — space itself flickers.');
+});
+
+/* ---------------- birth of this universe ---------------- */
+preset('milkyway');
+showHint('Tap to birth a star · <b>drag</b> to tear open a black hole · try the <b>Big Bang</b>.');
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

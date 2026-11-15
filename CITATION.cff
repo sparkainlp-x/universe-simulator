@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+title: "Universe Simulator"
+type: software
+authors:
+  - family-names: "Brisson"
+    given-names: "Jean-François"
+    orcid: "https://orcid.org/0009-0000-9778-5374"
+    affiliation: "Spark AI NLP, Fredericton, New Brunswick, Canada"
+version: 0.1.0
+date-released: "2026-11-14"
+license: AGPL-3.0-only
+repository-code: "https://github.com/sparkainlp-x/universe-simulator"
+url: "https://sparkainlpx.xyz"
+abstract: >-
+  Interactive universe sandbox: a full-screen living universe where you play
+  god. Tap to birth a star, drag to tear open a black hole (it pulls nearby
+  stars into orbit and swallows the ones that fall in), detonate a supernova
+  into a nebula, or spin up a whole spiral galaxy. Presets: Big Bang, Milky
+  Way, Black Hole, Nebula. Controls for time speed, gravity, star count and
+  a scale slider that zooms from quantum foam out to galaxy clusters; a
+  Quantum field toggle reveals flowing wave lines beneath everything, a nod
+  to Faggin's quantum-field view of the universe. A playful simulation, not
+  real astrophysics: gravity and orbits are simplified for fun, and the
+  displayed entropy is a game quantity, not a thermodynamic measurement. The
+  quantum-field view is a visual motif, not a measurement. No DOI yet (no
+  Zenodo record).
+keywords:
+  - universe
+  - simulation
+  - sandbox
+  - gravity
+  - black-hole
+  - supernova
+  - galaxy
+  - quantum-field
+  - visualization
+  - Faggin
