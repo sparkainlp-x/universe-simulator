@@ -6,7 +6,7 @@ spiral galaxy. Presets: **Big Bang, Milky Way, Black Hole, Nebula**.
 
 - **Author site:** https://sparkainlpx.xyz
 
-Version 0.1.0. Licence: AGPL-3.0-only. No DOI yet (no Zenodo record).
+Version 0.1.0. Copyright (c) 2026 Jean-Francois Brisson (Spark AI NLP). Licence: AGPL-3.0-only. No DOI yet (no Zenodo record).
 
 ## How to play
 
